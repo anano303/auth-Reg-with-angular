@@ -4,52 +4,58 @@ import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { UserDTO } from '../models/userDTO.model';
 import { User } from '../models/user.model';
 
+// @Injectable დეკორატორი აღნიშნავს, რომ ეს სერვისი შეიძლება დაინჯექტდეს სხვა კლასებში
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root', // სერვისი ხელმისაწვდომია მთელ აპლიკაციაში
 })
 export class UserService {
-  private apiUrl = 'https://rentcar.stepprojects.ge/api/Users';
+  private apiUrl = 'https://rentcar.stepprojects.ge/api/Users'; // API ენდპოინტის მისამართი
+
+  // BehaviorSubject არის RxJS-ის სპეციალური ტიპი, რომელიც ინახავს მიმდინარე მნიშვნელობას და აწვდის მას ახალ subscription-ებს
   private currentUserSubject: BehaviorSubject<User | null> =
     new BehaviorSubject<User | null>(null);
+
+  // Observable მიმდინარე მომხმარებლის მონაცემების მოსასმენად
   public currentUser: Observable<User | null> =
     this.currentUserSubject.asObservable();
-  private tokenCheckInterval: any;
+
+  private tokenCheckInterval: any; // ინტერვალი ტოკენის ვადის შესამოწმებლად
 
   constructor(private http: HttpClient) {
-    this.initUserFromStorage();
-    this.startTokenValidityCheck();
+    this.initUserFromStorage(); // ინიციალიზაცია ლოკალური საცავიდან
+    this.startTokenValidityCheck(); // ტოკენის ვადის პერიოდული შემოწმების დაწყება
   }
 
-  // Initialize user from localStorage - safer approach
+  // მომხმარებლის ინიციალიზაცია localStorage-დან - უსაფრთხო მიდგომა
   private initUserFromStorage(): void {
     try {
       const savedUserString = localStorage.getItem('currentUser');
-      // Only attempt to parse if the string is not null or undefined
+      // მხოლოდ მაშინ ვცდილობთ გაპარსვას, როდესაც სტრინგი არ არის null ან undefined
       if (
         savedUserString &&
         savedUserString !== 'undefined' &&
         savedUserString !== 'null'
       ) {
         const savedUser = JSON.parse(savedUserString);
-        this.currentUserSubject.next(savedUser);
+        this.currentUserSubject.next(savedUser); // მომხმარებლის ინფორმაციის განახლება BehaviorSubject-ში
         console.log('User loaded from storage:', !!savedUser);
       } else {
         console.log('No valid user data in storage');
       }
     } catch (error) {
       console.error('Error loading user data from localStorage:', error);
-      // Clear potentially corrupted data
+      // პოტენციურად დაზიანებული მონაცემების წაშლა
       localStorage.removeItem('currentUser');
       localStorage.removeItem('token');
     }
   }
 
-  // Register new user
+  // ახალი მომხმარებლის რეგისტრაცია
   register(user: UserDTO): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/register`, user);
   }
 
-  // Login user - completely revised for reliability
+  // მომხმარებლის ავტორიზაცია - სრულად გადამუშავებული სანდოობისთვის
   login(user: Partial<UserDTO>): Observable<any> {
     console.log('ავტორიზაციის მცდელობა:', user);
 
@@ -58,13 +64,13 @@ export class UserService {
         next: (response) => {
           console.log('API პასუხი:', response);
 
-          // Make sure we have a token before proceeding
+          // დავრწმუნდეთ, რომ გვაქვს ტოკენი, სანამ გავაგრძელებთ
           if (response && response.token) {
             try {
-              // Store token first
+              // ჯერ შევინახოთ ტოკენი
               localStorage.setItem('token', response.token);
 
-              // Then store user data if available
+              // შემდეგ შევინახოთ მომხმარებლის მონაცემები, თუ ისინი ხელმისაწვდომია
               if (response.user) {
                 // გავრცელებული ობიექტი ყველა მონაცემით
                 const fullUser = {
@@ -114,7 +120,7 @@ export class UserService {
               }
             } catch (error) {
               console.error('შეცდომა მონაცემების შენახვისას:', error);
-              // Even if storage fails, we can still update the in-memory state
+              // მაშინაც კი, თუ ლოკალური შენახვა წარუმატებელია, მაინც შეგვიძლია განვაახლოთ ოპერატიული მეხსიერების მდგომარეობა
               if (response.user) {
                 this.currentUserSubject.next(response.user);
               }
@@ -130,7 +136,7 @@ export class UserService {
     );
   }
 
-  // ახალი მეთოდი: მომხმარებლის დეტალური ინფორმაციის მიღება
+  // ახალი მეთოდი: მომხმარებლის დეტალური ინფორმაციის მიღება API-დან
   fetchUserDetails(): Observable<User> {
     // მოთხოვნაში უნდა გადავცეთ ავტორიზაციის ტოკენი
     const token = localStorage.getItem('token');
@@ -146,7 +152,7 @@ export class UserService {
       });
     }
 
-    // HTTP ჰედერების კონფიგურაცია
+    // HTTP ჰედერების კონფიგურაცია ავტორიზაციის ტოკენით
     const headers = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -183,26 +189,26 @@ export class UserService {
       );
   }
 
-  // Logout user
+  // მომხმარებლის გასვლა (logout)
   logout() {
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('token');
-    this.currentUserSubject.next(null);
+    localStorage.removeItem('currentUser'); // წავშალოთ მომხმარებლის მონაცემები
+    localStorage.removeItem('token'); // წავშალოთ ავტორიზაციის ტოკენი
+    this.currentUserSubject.next(null); // განვაახლოთ BehaviorSubject null მნიშვნელობით
     console.log('User logged out');
   }
 
-  // Get current logged in user
+  // მიმდინარე ავტორიზებული მომხმარებლის მიღება
   public get currentUserValue(): User | null {
     return this.currentUserSubject.value;
   }
 
-  // Enhanced isLoggedIn check - more reliable
+  // გაუმჯობესებული ავტორიზაციის შემოწმება - უფრო სანდო
   isLoggedIn(): boolean {
     try {
-      const hasToken = !!localStorage.getItem('token');
+      const hasToken = !!localStorage.getItem('token'); // აქვს თუ არა ტოკენი
       const hasUser =
-        !!this.currentUserValue || !!localStorage.getItem('currentUser');
-      const isLoggedIn = hasToken && hasUser;
+        !!this.currentUserValue || !!localStorage.getItem('currentUser'); // არსებობს თუ არა მომხმარებელი
+      const isLoggedIn = hasToken && hasUser; // ავტორიზებულია, თუ ორივე პირობა სრულდება
       console.log(
         `Auth check: hasToken=${hasToken}, hasUser=${hasUser}, isLoggedIn=${isLoggedIn}`
       );
@@ -213,26 +219,26 @@ export class UserService {
     }
   }
 
-  // Start periodic check for token validity
+  // ტოკენის ვალიდურობის პერიოდული შემოწმების დაწყება
   private startTokenValidityCheck(): void {
-    // Check token validity every 30 seconds
+    // ტოკენის ვალიდურობის შემოწმება ყოველ 30 წამში
     this.tokenCheckInterval = setInterval(() => {
       this.checkAndUpdateAuthStatus();
     }, 30000);
   }
 
-  // Check if the token is still valid
+  // ტოკენის ვალიდურობის შემოწმება და ავტორიზაციის სტატუსის განახლება
   private checkAndUpdateAuthStatus(): void {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        // No token found, log out
+        // ტოკენი არ მოიძებნა, გავიდეთ სისტემიდან
         console.log('No auth token found, logging out');
         this.logout();
         return;
       }
 
-      // Check if token is expired (if it's JWT)
+      // შევამოწმოთ თუ ტოკენს ვადა გაუვიდა (JWT ტოკენის შემთხვევაში)
       if (this.isTokenExpired(token)) {
         console.log('Auth token expired, logging out');
         this.logout();
@@ -242,32 +248,32 @@ export class UserService {
     }
   }
 
-  // Basic check for JWT token expiration
+  // JWT ტოკენის ვადის ამოწურვის მარტივი შემოწმება
   private isTokenExpired(token: string): boolean {
     try {
-      // For JWT tokens - decode and check expiration
-      // This is a simple implementation, more robust implementations would use a JWT library
+      // JWT ტოკენებისთვის - დეკოდირება და ვადის შემოწმება
+      // ეს არის მარტივი იმპლემენტაცია, უფრო მძლავრი იმპლემენტაციები იყენებენ JWT ბიბლიოთეკას
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
-        // Not a JWT token, can't determine if expired
+        // არ არის JWT ტოკენი, ვერ განისაზღვრება ვადა
         return false;
       }
 
       const payload = JSON.parse(atob(tokenParts[1]));
       if (!payload.exp) {
-        // No expiration claim
+        // არ არსებობს ვადის ამოწურვის მტკიცება
         return false;
       }
 
-      // Check if token is expired (exp is in seconds, Date.now() is in milliseconds)
+      // შევამოწმოთ ტოკენის ვადა (exp არის წამებში, Date.now() არის მილიწამებში)
       return payload.exp * 1000 < Date.now();
     } catch (e) {
-      // If there's an error parsing, conservatively assume token is valid
+      // თუ გაპარსვისას მოხდა შეცდომა, კონსერვატიულად ვივარაუდოთ, რომ ტოკენი ვალიდურია
       return false;
     }
   }
 
-  // Clean up on service destroy
+  // სერვისის განადგურებისას რესურსების გასუფთავება
   ngOnDestroy(): void {
     if (this.tokenCheckInterval) {
       clearInterval(this.tokenCheckInterval);
